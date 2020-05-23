@@ -25,6 +25,7 @@ func main() {
 	flag.Parse()
 	if *targetName == "" || *pipelineName == "" {
 		flag.Usage()
+		return
 	}
 
 	target, err := rc.LoadTarget(rc.TargetName(*targetName), false)
