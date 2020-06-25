@@ -1,0 +1,84 @@
+<head>
+    <style type="text/css" media="screen">
+     body {
+         background-color: #3d3c3c;
+     }
+     .cell-row {
+         margin: 0.5em 0 0.5em 0;
+         display: flex;
+         flex-wrap: wrap;
+     }
+     .cell-header {
+         display: flex;
+         flex-wrap: wrap;
+         font-weight: 600;
+     }
+     .resource-name {
+         background-color: #201e1e;
+         margin: 0.1em;
+         color: white;
+         padding: 0.5em;
+     }
+     .resource-version {
+         background-color: #201e1e;
+         margin: 0.1em;
+         color: white;
+         padding: 0.5em;
+     }
+     .cell {
+         margin: 0.1em;
+         white-space: nowrap;
+         overflow: hidden;
+         text-overflow: ellipsis;
+         padding: 0.5em;
+         width: 10em;
+         color: white;
+     }
+     .succeeded {
+         background-color: #11c560;
+     }
+     .failed {
+         background-color: #ed4b35;
+     }
+     .errored {
+         background-color: #f5a623;
+     }
+     .aborted {
+         background-color: #8b572a;
+     }
+     .missing {
+         background-color: #9b9b9b;
+     }
+    </style>
+</head>
+<body>
+
+    {{ range . }}
+
+    {{$resource := .Resource}}
+
+    {{ range .CellRows }}
+    <div class="cell-header">
+        <span title="{{$resource}}" class="resource-name">
+            {{$resource}}
+        </span>
+
+        <span title="{{.Version}}" class="resource-version">
+            {{.Version}}
+        </span>
+    </div>
+    <div class="cell-row">
+
+        {{ range .Cells }}
+
+        <div title="{{.Job}}" class="cell {{.Status}}">
+            {{.Job}}
+        </div>
+
+        {{ end }}
+    </div>
+    {{ end }}
+
+    {{ end }}
+
+</body>
