@@ -3,12 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
-	"os"
 	"regexp"
 	"sort"
 	"strconv"
 	"text/template"
+	"time"
 
 	"github.com/concourse/concourse/atc"
 	"github.com/concourse/concourse/fly/rc"
@@ -37,7 +38,7 @@ func main() {
 	// http.HandleFunc("/", func(rw http.ResponseWriter, req *http.Request) {
 	output := processPipeline(client, pipeline)
 	tmpl := template.Must(template.New("root").ParseFiles("index.html"))
-	tmpl.ExecuteTemplate(os.Stdout, "index.html", output)
+	tmpl.ExecuteTemplate(ioutil.Discard, "index.html", output)
 	// })
 	// fmt.Println("Listening on port", os.Getenv("PORT"))
 	// http.ListenAndServe(":"+os.Getenv("PORT"), nil)
@@ -59,13 +60,21 @@ type result struct {
 }
 
 func processPipeline(client concourse.Client, pipeline atc.Pipeline) []result {
+	var start = time.Now()
+	var tick = func(name string) {
+		fmt.Println(name, time.Since(start))
+		start = time.Now()
+	}
+	tick("start")
 	team := client.Team(pipeline.TeamName)
 	deps, err := findDependencies(client, pipeline, "promote_trigger")
 	if err != nil {
 		log.Fatal(err)
 	}
+	tick("findDependencies")
 
 	config, _, _, err := team.PipelineConfig(pipeline.Name)
+	tick("pipelineConfig")
 
 	var output []result
 	for resourceName, edges := range deps {
@@ -90,11 +99,13 @@ func processPipeline(client concourse.Client, pipeline atc.Pipeline) []result {
 				{Version: extractVersion(resourceConfig, latestVersion), Cells: cells},
 			},
 		})
+		tick(resourceName)
 	}
 
 	sort.Slice(output, func(i, j int) bool {
 		return output[i].Resource < output[j].Resource
 	})
+	tick("sort")
 
 	return output
 }
