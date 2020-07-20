@@ -1,19 +1,11 @@
-package main
+package deps
 
 import (
 	"github.com/concourse/concourse/atc"
 	"github.com/concourse/concourse/go-concourse/concourse"
 )
 
-type Graph []Edge
-
-type Edge struct {
-	Resource string
-	From, To string
-	Trigger  bool
-}
-
-func findDependencies(client concourse.Client, pipeline atc.Pipeline, jobName string) (map[string]Graph, error) {
+func findDependencies(client concourse.Client, pipeline atc.Pipeline, jobName string) (map[string][]atc.Job, error) {
 	jobs, err := client.Team("main").ListJobs(pipeline.Name)
 	if err != nil {
 		return nil, err
@@ -23,21 +15,23 @@ func findDependencies(client concourse.Client, pipeline atc.Pipeline, jobName st
 		jobsByName[job.Name] = job
 	}
 
-	var graphsByResource = make(map[string]Graph)
+	var graphsByResource = make(map[string][]atc.Job)
 	for _, input := range jobsByName[jobName].Inputs {
 
-		var seen = make(map[Edge]struct{})
-		recurse(jobsByName, jobName, input.Resource, func(e Edge) bool {
-			_, visited := seen[e]
+		var graph = []atc.Job{}
+		var seen = make(map[string]struct{})
+		recurse(jobsByName, jobName, input.Resource, func(e atc.Job) bool {
+			_, visited := seen[e.Name]
 			if !visited {
 
-				seen[e] = struct{}{}
-				graphsByResource[e.Resource] = append(graphsByResource[e.Resource], e)
+				seen[e.Name] = struct{}{}
+				graph = append(graph, e)
 
 				return true
 			}
 			return false
 		})
+		graphsByResource[input.Resource] = graph
 
 	}
 
@@ -47,13 +41,13 @@ func findDependencies(client concourse.Client, pipeline atc.Pipeline, jobName st
 	return graphsByResource, nil
 }
 
-func reverse(edges []Edge) {
+func reverse(edges []atc.Job) {
 	for i, j := 0, len(edges)-1; i < j; i, j = i+1, j-1 {
 		edges[i], edges[j] = edges[j], edges[i]
 	}
 }
 
-func recurse(jobs map[string]atc.Job, jobName, resourceName string, callback func(Edge) bool) {
+func recurse(jobs map[string]atc.Job, jobName, resourceName string, callback func(atc.Job) bool) {
 	job := jobs[jobName]
 
 	for _, input := range job.Inputs {
@@ -61,12 +55,7 @@ func recurse(jobs map[string]atc.Job, jobName, resourceName string, callback fun
 			continue
 		}
 		for _, j := range input.Passed {
-			if callback(Edge{
-				From:     j,
-				To:       jobName,
-				Resource: input.Resource,
-				Trigger:  input.Trigger,
-			}) {
+			if callback(jobs[j]) {
 				recurse(jobs, j, resourceName, callback)
 			}
 		}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/Logiraptor/concourse-blockers/deps"
 	"github.com/concourse/concourse/atc"
 	"github.com/concourse/concourse/fly/rc"
 	"github.com/concourse/concourse/go-concourse/concourse"
@@ -40,15 +41,15 @@ func main() {
 
 	for _, p := range pipelines {
 		if p.Name == *pipelineName {
-			processPipeline(client, p, *jobName, *resourceName)
+			ci := deps.NewCI(client, target.Team(), p)
+			processPipeline(ci, target.Team(), p, *jobName, *resourceName)
 			return
 		}
 	}
 	log.Fatal("Could not find a pipeline with name:", *pipelineName)
 }
 
-func processPipeline(client concourse.Client, pipeline atc.Pipeline, jobName string, resourceName string) {
-	team := client.Team(pipeline.TeamName)
+func processPipeline(ci deps.CI, team concourse.Team, pipeline atc.Pipeline, jobName string, resourceName string) {
 	jobs, err := team.ListJobs(pipeline.Name)
 	if err != nil {
 		log.Fatal(err)
@@ -65,35 +66,39 @@ func processPipeline(client concourse.Client, pipeline atc.Pipeline, jobName str
 		}
 		fmt.Printf("%s\n", j.Name)
 
-		for _, r := range j.Inputs {
-			if resourceName != "" && resourceName != r.Resource {
+		prereqsByResource := ci.PrerequisitesForJob(j)
+
+		for resource, jobs := range prereqsByResource {
+			if resourceName != "" && resourceName != resource {
 				continue
 			}
-			fmt.Printf("  %s\n", r.Resource)
-
-			paths := clearPaths(jobsByName, r.Resource, j)
-
-			if len(r.Passed) == 0 {
-				color.Info.Printf("    No passed constraints\n")
-				continue
-			}
+			fmt.Printf("  %s\n", resource)
 
 			fmt.Println("    The following jobs must pass for this trigger to occur:")
-			for _, path := range paths {
-				fmt.Printf("    ")
-				for _, step := range path {
-					if step.Trigger {
-						color.Info.Printf("%s, ", step.From)
-					} else {
-						color.Error.Printf("%s, ", step.From)
-					}
+			fmt.Printf("    ")
+			for _, path := range jobs {
+				if path.HasNewInputs {
+					color.Error.Printf("%s, ", path.Name)
+				} else if triggersOnResource(path, resource) {
+					color.Info.Printf("%s, ", path.Name)
+				} else {
+					color.Warn.Printf("%s, ", path.Name)
 				}
-				fmt.Printf("%s\n", j.Name)
 			}
+			fmt.Printf("%s\n", j.Name)
 
 			fmt.Println()
 		}
 	}
+}
+
+func triggersOnResource(job atc.Job, resource string) bool {
+	for _, r := range job.Inputs {
+		if r.Name == resource {
+			return r.Trigger
+		}
+	}
+	return false
 }
 
 func clearPaths(jobsByName map[string]atc.Job, resource string, job atc.Job) [][]Edge {

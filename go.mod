@@ -1,4 +1,4 @@
-module concourse-blockers
+module github.com/Logiraptor/concourse-blockers
 
 go 1.14
 
